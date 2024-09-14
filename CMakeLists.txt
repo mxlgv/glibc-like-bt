@@ -17,7 +17,6 @@ if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
 endif()
 
 # Test target
-
 include(CTest)
 enable_testing()
 

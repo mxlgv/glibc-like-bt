@@ -20,6 +20,12 @@ cmake -DCMAKE_BUILD_TYPE=MinSizeRel -B build
 cmake --build build
 ```
 
+When cross-compiling, you must specify the object file format for `nasm`. \
+For example:
+```sh
+cmake -DCMAKE_ASM_NASM_OBJECT_FORMAT=coff -B build
+```
+
 ## Running tests
 Make sure you have a debug build and run:
 ```sh
