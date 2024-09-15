@@ -29,3 +29,14 @@ add_executable(TestBacktraceOver tests/TestBacktrace.c)
 target_link_libraries(TestBacktraceOver PRIVATE GlibcBt)
 target_compile_definitions(TestBacktraceOver PRIVATE DEPTH=40)
 add_test(NAME TestBacktraceOver COMMAND "$<TARGET_FILE:TestBacktraceOver>")
+
+# ClangForceFormat target
+add_custom_target(ClangForceFormat
+COMMAND clang-format
+  -i
+  *.c *.h */*.c */*.h
+WORKING_DIRECTORY
+  ${CMAKE_SOURCE_DIR}
+COMMENT
+  "Formatting with clang-format ..."
+)

@@ -17,8 +17,8 @@
 #include "Helper.h"
 
 void TestMain(void) {
-  void* addrs[DEPTH];
-  void* addrs_expected[DEPTH];
+  void *addrs[DEPTH];
+  void *addrs_expected[DEPTH];
   int depth, depth_expected;
 
 #ifdef WIN32

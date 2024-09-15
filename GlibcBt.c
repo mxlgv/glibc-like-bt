@@ -16,11 +16,11 @@
 #endif
 
 struct StackFrame {
-  struct StackFrame* nextFrame;
-  void* returnAddr;
+  struct StackFrame *nextFrame;
+  void *returnAddr;
 };
 
-static void Panic(const char* fmt, ...) {
+static void Panic(const char *fmt, ...) {
   va_list vlist;
   va_start(vlist, fmt);
   vfprintf(stderr, fmt, vlist);
@@ -29,15 +29,15 @@ static void Panic(const char* fmt, ...) {
 }
 
 static uintptr_t GetStackBottom(void) {
-  void* stack_bottom_addr = NULL;
-  void* dummy;
+  void *stack_bottom_addr = NULL;
+  void *dummy;
 
 #ifdef WIN32
   GetCurrentThreadStackLimits((PULONG_PTR)&dummy,
                               (PULONG_PTR)&stack_bottom_addr);
 #else
   char line[100];
-  FILE* maps_file = fopen("/proc/self/maps", "r");
+  FILE *maps_file = fopen("/proc/self/maps", "r");
   if (!maps_file) {
     Panic("Can't open '/proc/self/maps'!");
   }
@@ -59,7 +59,7 @@ static uintptr_t GetStackBottom(void) {
   return (uintptr_t)stack_bottom_addr;
 }
 
-static struct StackFrame* GetNextFrame(const struct StackFrame* stack_frame,
+static struct StackFrame *GetNextFrame(const struct StackFrame *stack_frame,
                                        uintptr_t stack_bottom_addr) {
   if ((uintptr_t)stack_frame->nextFrame < (uintptr_t)stack_frame ||
       (uintptr_t)stack_frame->nextFrame > stack_bottom_addr) {
@@ -69,9 +69,9 @@ static struct StackFrame* GetNextFrame(const struct StackFrame* stack_frame,
   return stack_frame->nextFrame;
 }
 
-int GlibcBt_Backtrace(void** addrs, int depth) {
+int GlibcBt_Backtrace(void **addrs, int depth) {
   int frame_count = 0;
-  struct StackFrame* stack_frame = GlibcBt_GetFrameAddr();
+  struct StackFrame *stack_frame = GlibcBt_GetFrameAddr();
   uintptr_t stack_bottom_addr = GetStackBottom();
 
   for (frame_count = 0;
@@ -84,7 +84,7 @@ int GlibcBt_Backtrace(void** addrs, int depth) {
   return frame_count;
 }
 
-char** GlibcBt_BacktraceSymbols(void** addrs, int depth) {
+char **GlibcBt_BacktraceSymbols(void **addrs, int depth) {
   (void)addrs;
   (void)depth;
 
@@ -92,7 +92,7 @@ char** GlibcBt_BacktraceSymbols(void** addrs, int depth) {
   return NULL;
 }
 
-void GlibcBt_BacktraceSymbolsFd(void** addrs, int depth, int fd) {
+void GlibcBt_BacktraceSymbolsFd(void **addrs, int depth, int fd) {
   (void)addrs;
   (void)depth;
   (void)fd;
