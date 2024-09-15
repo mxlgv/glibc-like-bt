@@ -6,7 +6,7 @@
 #include <stdarg.h>
 #include <stdint.h>
 
-#ifdef WIN32
+#ifdef _WIN32
 #include <windows.h>
 #include <dbghelp.h>
 #else
@@ -21,7 +21,7 @@ void TestMain(void) {
   void *addrs_expected[DEPTH];
   int depth, depth_expected;
 
-#ifdef WIN32
+#ifdef _WIN32
   depth_expected = CaptureStackBackTrace(0, DEPTH, addrs_expected, NULL);
 #else
   depth_expected = backtrace(addrs_expected, DEPTH);

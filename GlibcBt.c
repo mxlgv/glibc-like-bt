@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#if defined(WIN32)
+#if defined(_WIN32)
 #include <processthreadsapi.h>
 #endif
 
@@ -32,7 +32,7 @@ static uintptr_t GetStackBottom(void) {
   void *stack_bottom_addr = NULL;
   void *dummy;
 
-#ifdef WIN32
+#ifdef _WIN32
   GetCurrentThreadStackLimits((PULONG_PTR)&dummy,
                               (PULONG_PTR)&stack_bottom_addr);
 #else
