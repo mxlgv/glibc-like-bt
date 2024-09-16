@@ -3,99 +3,181 @@
  * Copyright (c) 2024 Maxim Logaev
  */
 
+#define _GNU_SOURCE
+
 #include "GlibcBt.h"
 
-#include <stdarg.h>
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#if defined(_WIN32)
-#include <processthreadsapi.h>
-#endif
+#include <dlfcn.h>
+#include <unistd.h>
+
+const char *kFmtSymbols = "%s(%s+0x%" PRIxPTR ") [0x%" PRIxPTR "]";
+const size_t kFmtSymbolsSize = sizeof("(+0x) [0x]");
+
+const char *kFmtNoSymbols = "[0x%" PRIxPTR "]";
+const size_t kFmtNoSymbolsSize = sizeof("[0x]");
 
 struct StackFrame {
-  struct StackFrame *nextFrame;
-  void *returnAddr;
+  struct StackFrame *next_frame;
+  void *ret_addr;
 };
 
-static void Panic(const char *fmt, ...) {
-  va_list vlist;
-  va_start(vlist, fmt);
-  vfprintf(stderr, fmt, vlist);
-  va_end(vlist);
-  exit(1);
-}
+struct Symbol {
+  Dl_info info;
+  uintptr_t ret_addr_offset;
+  size_t pre_calc_str_size;
+  int found;
+};
 
 static uintptr_t GetStackBottom(void) {
-  void *stack_bottom_addr = NULL;
-  void *dummy;
+  uintptr_t stack_bottom_addr = 0;
+  uintptr_t dummy;
 
-#ifdef _WIN32
-  GetCurrentThreadStackLimits((PULONG_PTR)&dummy,
-                              (PULONG_PTR)&stack_bottom_addr);
-#else
   char line[100];
-  FILE *maps_file = fopen("/proc/self/maps", "r");
+  FILE *const maps_file = fopen("/proc/self/maps", "r");
   if (!maps_file) {
-    Panic("Can't open '/proc/self/maps'!");
+    return stack_bottom_addr;
   }
 
   while (fgets(line, sizeof(line), maps_file)) {
     if (strstr(line, "[stack]")) {
-      sscanf(line, "%p-%p", &dummy, &stack_bottom_addr);
+      sscanf(line, "%" SCNxPTR "-%" SCNxPTR, &dummy, &stack_bottom_addr);
       break;
     }
   }
 
   fclose(maps_file);
-#endif
 
-  if (!stack_bottom_addr) {
-    Panic("Stack bottom not found!");
-  }
-
-  return (uintptr_t)stack_bottom_addr;
+  return stack_bottom_addr;
 }
 
 static struct StackFrame *GetNextFrame(const struct StackFrame *stack_frame,
                                        uintptr_t stack_bottom_addr) {
-  if ((uintptr_t)stack_frame->nextFrame < (uintptr_t)stack_frame ||
-      (uintptr_t)stack_frame->nextFrame > stack_bottom_addr) {
+  if ((uintptr_t)stack_frame->next_frame < (uintptr_t)stack_frame ||
+      (uintptr_t)stack_frame->next_frame > stack_bottom_addr) {
     return NULL;
   }
 
-  return stack_frame->nextFrame;
+  return stack_frame->next_frame;
 }
 
 int GlibcBt_Backtrace(void **addrs, int depth) {
-  int frame_count = 0;
+  int frame_count;
   struct StackFrame *stack_frame = GlibcBt_GetFrameAddr();
-  uintptr_t stack_bottom_addr = GetStackBottom();
+  const uintptr_t stack_bottom_addr = GetStackBottom();
+  if (!stack_bottom_addr) {
+    return 0;
+  }
 
-  for (frame_count = 0;
-       stack_frame && stack_frame->returnAddr && frame_count < depth;
-       frame_count++) {
-    addrs[frame_count] = stack_frame->returnAddr;
+  for (frame_count = 0; stack_frame && frame_count < depth; frame_count++) {
+    addrs[frame_count] = stack_frame->ret_addr;
     stack_frame = GetNextFrame(stack_frame, stack_bottom_addr);
   }
 
   return frame_count;
 }
 
-char **GlibcBt_BacktraceSymbols(void **addrs, int depth) {
-  (void)addrs;
-  (void)depth;
+static size_t CalcHexDigits(uintptr_t ptr) {
+  size_t i;
+  for (i = 0; ptr; i++) {
+    ptr <<= 4;
+  }
 
-  Panic("Function '%s' not implemented!\n", __func__);
-  return NULL;
+  return i;
 }
 
-void GlibcBt_BacktraceSymbolsFd(void **addrs, int depth, int fd) {
-  (void)addrs;
-  (void)depth;
-  (void)fd;
+char **GlibcBt_BacktraceSymbols(void *const *addrs, int depth) {
+  struct Symbol *const syms = malloc(depth * sizeof(struct Symbol));
+  if (!syms) {
+    return NULL;
+  }
 
-  Panic("Function '%s' not implemented!\n", __func__);
+  size_t strs_area_size = 0;
+
+  for (int i = 0; i < depth; i++) {
+    syms[i].found = dladdr(addrs[i], &syms[i].info);
+    if (syms[i].found) {
+      if (syms[i].info.dli_saddr && syms[i].info.dli_sname) {
+        syms[i].ret_addr_offset =
+            (uintptr_t)addrs[i] - (uintptr_t)syms[i].info.dli_saddr;
+      } else {
+        syms[i].ret_addr_offset =
+            (uintptr_t)addrs[i] - (uintptr_t)syms[i].info.dli_fbase;
+        syms[i].info.dli_sname = "";
+      }
+
+      syms[i].pre_calc_str_size = kFmtSymbolsSize +
+                                  strlen(syms[i].info.dli_fname) +
+                                  strlen(syms[i].info.dli_sname) +
+                                  CalcHexDigits(syms[i].ret_addr_offset) +
+                                  CalcHexDigits((uintptr_t)addrs[i]);
+    } else {
+      syms[i].pre_calc_str_size =
+          kFmtNoSymbolsSize + CalcHexDigits((uintptr_t)addrs[i]);
+    }
+
+    strs_area_size += syms[i].pre_calc_str_size;
+  }
+
+  char **const strs = malloc(depth * sizeof(char *) + strs_area_size);
+  if (!strs) {
+    goto exit;
+  }
+
+  char *str_area = (char *)&strs[depth];
+
+  for (int i = 0; i < depth; i++) {
+    strs[i] = str_area;
+    if (syms[i].found) {
+      snprintf(str_area, syms[i].pre_calc_str_size, kFmtSymbols,
+               syms[i].info.dli_fname, syms[i].info.dli_sname,
+               syms[i].ret_addr_offset, (uintptr_t)addrs[i]);
+    } else {
+      snprintf(str_area, syms[i].pre_calc_str_size, kFmtNoSymbols,
+               (uintptr_t)addrs[i]);
+    }
+
+    str_area += syms[i].pre_calc_str_size;
+  }
+
+exit:
+  free(syms);
+  return strs;
+}
+
+void GlibcBt_BacktraceSymbolsFd(void *const *addrs, int depth, int fd) {
+  const int new_fd = dup(fd);
+  FILE *const file = fdopen(new_fd, "w");
+  if (!file) {
+    return;
+  }
+
+  for (int i = 0; i < depth; i++) {
+    Dl_info dl_info;
+    if (dladdr(addrs[i], &dl_info)) {
+      uintptr_t ret_addr_offset = 0;
+      if (dl_info.dli_saddr && dl_info.dli_sname) {
+        ret_addr_offset = (uintptr_t)addrs[i] - (uintptr_t)dl_info.dli_saddr;
+      } else {
+        ret_addr_offset = (uintptr_t)addrs[i] - (uintptr_t)dl_info.dli_fbase;
+        dl_info.dli_sname = "";
+      }
+
+      fprintf(file, kFmtSymbols, dl_info.dli_fname, dl_info.dli_sname,
+              ret_addr_offset, (uintptr_t)addrs[i]);
+    } else {
+      fprintf(file, kFmtNoSymbols, (uintptr_t)addrs[i]);
+    }
+
+    fprintf(file, "\n");
+  }
+
+  fflush(file);
+  fsync(new_fd);
+  fclose(file);
 }

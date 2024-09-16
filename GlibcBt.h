@@ -15,8 +15,8 @@ void *GlibcBt_GetFrameAddr(void);
 
 // Fully compatible with backtrace functions from the GNU C library:
 int GlibcBt_Backtrace(void **addrs, int depth);
-char **GlibcBt_BacktraceSymbols(void **addrs, int depth);
-void GlibcBt_BacktraceSymbolsFd(void **addrs, int depth, int fd);
+char **GlibcBt_BacktraceSymbols(void *const *addrs, int depth);
+void GlibcBt_BacktraceSymbolsFd(void *const *addrs, int depth, int fd);
 
 #ifdef __cplusplus
 }

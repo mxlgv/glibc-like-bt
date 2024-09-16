@@ -4,7 +4,7 @@ and external behavior to
 [GNU C Library backtrace](https://www.gnu.org/software/libc/manual/html_node/Backtraces.html).
 
 ## Compatibility
-- OS: GNU/Linux, Windows;
+- OS: GNU/Linux;
 - Arch: x86, x86_64.
 
 ## Building

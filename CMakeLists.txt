@@ -11,30 +11,33 @@ include_directories(${CMAKE_SOURCE_DIR})
 add_library(GlibcBt STATIC GlibcBt.c FrameAddr.asm)
 
 if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
-    target_compile_options(GlibcBt PRIVATE 
+    target_compile_options(GlibcBt PRIVATE
         $<$<COMPILE_LANGUAGE:C>:-Wall -Wextra -Wpedantic -Werror -fanalyzer>
     )
 endif()
 
 # Test target
-include(CTest)
-enable_testing()
+if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
+  include(CTest)
+  enable_testing()
 
-add_executable(TestBacktrace tests/TestBacktrace.c)
-target_link_libraries(TestBacktrace PRIVATE GlibcBt )
-target_compile_definitions(TestBacktrace PRIVATE DEPTH=4)
-add_test(NAME TestBacktrace COMMAND "$<TARGET_FILE:TestBacktrace>")
+  add_executable(TestSymbols Test.c)
+  target_link_libraries(TestSymbols PRIVATE GlibcBt)
+  set_property(TARGET TestSymbols PROPERTY ENABLE_EXPORTS ON)
 
-add_executable(TestBacktraceOver tests/TestBacktrace.c)
-target_link_libraries(TestBacktraceOver PRIVATE GlibcBt)
-target_compile_definitions(TestBacktraceOver PRIVATE DEPTH=40)
-add_test(NAME TestBacktraceOver COMMAND "$<TARGET_FILE:TestBacktraceOver>")
+  add_executable(TestNoSymbols Test.c)
+  target_link_libraries(TestNoSymbols PRIVATE GlibcBt)
+  target_link_options(TestNoSymbols PRIVATE -static)
+
+  add_test(NAME TestSymbols COMMAND "$<TARGET_FILE:TestSymbols>")
+  add_test(NAME TestNoSymbols COMMAND "$<TARGET_FILE:TestNoSymbols>")
+endif()
 
 # ClangForceFormat target
 add_custom_target(ClangForceFormat
 COMMAND clang-format
   -i
-  *.c *.h */*.c */*.h
+  *.c *.h
 WORKING_DIRECTORY
   ${CMAKE_SOURCE_DIR}
 COMMENT
